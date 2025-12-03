@@ -1,0 +1,32 @@
+{
+  "rules": {
+    "leaderboard": {
+      ".read": true,
+      "all-time": {
+        ".indexOn": "score",
+        ".write": "!data.exists()",
+        "$scoreId": {
+          ".validate": "newData.hasChildren(['name', 'score', 'timestamp', 'date']) && newData.child('name').isString() && newData.child('name').val().length <= 20 && newData.child('score').isNumber() && newData.child('score').val() >= 0"
+        }
+      },
+      "daily": {
+        "$date": {
+          ".indexOn": "score",
+          ".write": "!data.exists()",
+          "$scoreId": {
+            ".validate": "newData.hasChildren(['name', 'score', 'timestamp', 'date']) && newData.child('name').isString() && newData.child('name').val().length <= 20 && newData.child('score').isNumber() && newData.child('score').val() >= 0"
+          }
+        }
+      },
+      "weekly": {
+        "$week": {
+          ".indexOn": "score",
+          ".write": "!data.exists()",
+          "$scoreId": {
+            ".validate": "newData.hasChildren(['name', 'score', 'timestamp', 'date']) && newData.child('name').isString() && newData.child('name').val().length <= 20 && newData.child('score').isNumber() && newData.child('score').val() >= 0"
+          }
+        }
+      }
+    }
+  }
+}

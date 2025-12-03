@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Snake - Play Free Online Snake Game</title>
+    <meta name="description"
+        content="Play Neon Snake - A modern twist on the classic snake game with stunning neon graphics, smooth gameplay, and exciting power-ups. Free to play!">
+    <meta name="keywords" content="snake game, neon snake, online game, free game, arcade game, browser game">
+
+    <!-- Google AdSense Verification Code -->
+    <meta name="google-adsense-account" content="ca-pub-1899039502984763">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="leaderboard.css">
+
+    <!-- Google AdSense Script -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1899039502984763"
+        crossorigin="anonymous"></script>
+</head>
+
+<body>
+    <div class="stars"></div>
+    <div class="stars2"></div>
+    <div class="stars3"></div>
+
+    <div class="container">
+        <!-- Top Ad Banner (728x90 Leaderboard) -->
+        <div class="ad-container ad-top">
+            <!-- AdSense Auto-Ad Unit -->
+            <ins class="adsbygoogle" style="display:inline-block;width:728px;height:90px"
+                data-ad-client="ca-pub-1899039502984763" data-ad-slot="auto"></ins>
+            <script>
+                (adsbygoogle = window.adsbygoogle || []).push({});
+            </script>
+        </div>
+
+        <header>
+            <h1 class="game-title">
+                <span class="neon-text">NEON</span>
+                <span class="snake-text">SNAKE</span>
+            </h1>
+            <div class="score-container">
+                <div class="score-box">
+                    <span class="score-label">SCORE</span>
+                    <span class="score-value" id="score">0</span>
+                </div>
+                <div class="score-box">
+                    <span class="score-label">HIGH SCORE</span>
+                    <span class="score-value" id="highScore">0</span>
+                </div>
+                <button class="leaderboard-btn" onclick="leaderboard?.showLeaderboard()" title="View Leaderboard">
+                    <span class="trophy-icon">🏆</span>
+                    <span class="btn-text">LEADERBOARD</span>
+                </button>
+            </div>
+        </header>
+
+        <div class="game-area">
+            <!-- Left Sidebar Ad (160x600 Skyscraper) -->
+            <div class="ad-container ad-sidebar-left">
+                <ins class="adsbygoogle" style="display:inline-block;width:160px;height:600px"
+                    data-ad-client="ca-pub-1899039502984763" data-ad-slot="auto"></ins>
+                <script>
+                    (adsbygoogle = window.adsbygoogle || []).push({});
+                </script>
+            </div>
+
+            <div class="game-wrapper">
+                <canvas id="gameCanvas"></canvas>
+                <div class="game-overlay" id="gameOverlay">
+                    <div class="overlay-content">
+                        <h2 class="overlay-title">READY TO PLAY?</h2>
+                        <p class="overlay-text">Use arrow keys or WASD to control the snake</p>
+                        <button class="btn-start" id="startBtn">START GAME</button>
+                    </div>
+                </div>
+                <div class="game-overlay hidden" id="gameOverOverlay">
+                    <div class="overlay-content">
+                        <h2 class="overlay-title game-over-title">GAME OVER</h2>
+                        <p class="overlay-text final-score">Final Score: <span id="finalScore">0</span></p>
+                        <button class="btn-start" id="restartBtn">PLAY AGAIN</button>
+                    </div>
+                </div>
+                <div class="twist-warning hidden" id="twistWarning">
+                    <div class="warning-icon">⚠️</div>
+                    <div class="warning-text" id="warningText">TWIST INCOMING!</div>
+                </div>
+            </div>
+
+            <!-- Right Sidebar Ad (160x600 Skyscraper) -->
+            <div class="ad-container ad-sidebar-right">
+                <ins class="adsbygoogle" style="display:inline-block;width:160px;height:600px"
+                    data-ad-client="ca-pub-1899039502984763" data-ad-slot="auto"></ins>
+                <script>
+                    (adsbygoogle = window.adsbygoogle || []).push({});
+                </script>
+            </div>
+        </div>
+
+        <div class="controls-info">
+            <div class="control-item">
+                <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>
+                <span>Arrow Keys</span>
+            </div>
+            <div class="control-item">
+                <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
+                <span>WASD</span>
+            </div>
+            <div class="control-item">
+                <kbd>SPACE</kbd>
+                <span>Pause</span>
+            </div>
+        </div>
+
+
+        <footer>
+            <a href="privacy.html" target="_blank">Privacy Policy</a>
+        </footer>
+    </div>
+
+    <!-- Leaderboard Modal -->
+    <div class="modal hidden" id="leaderboardModal">
+        <div class="modal-overlay" onclick="leaderboard?.hideLeaderboard()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">🏆 LEADERBOARD</h2>
+                <button class="modal-close" onclick="leaderboard?.hideLeaderboard()">✕</button>
+            </div>
+
+            <div class="period-selector">
+                <button class="period-btn active" data-period="all-time"
+                    onclick="leaderboard?.switchPeriod('all-time')">
+                    All Time
+                </button>
+                <button class="period-btn" data-period="daily" onclick="leaderboard?.switchPeriod('daily')">
+                    Daily
+                </button>
+                <button class="period-btn" data-period="weekly" onclick="leaderboard?.switchPeriod('weekly')">
+                    Weekly
+                </button>
+            </div>
+
+            <div class="leaderboard-list" id="leaderboardList">
+                <div class="loading">Loading scores...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Name Prompt Modal -->
+    <div class="modal hidden" id="namePromptModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content name-prompt">
+            <div class="modal-header">
+                <h2 class="modal-title">🎉 GREAT SCORE!</h2>
+            </div>
+
+            <p class="prompt-text">You scored <span class="highlight" id="promptScore">0</span> points!</p>
+            <p class="prompt-subtext">Enter your name for the leaderboard:</p>
+
+            <input type="text" id="playerNameInput" class="name-input" placeholder="Your Name" maxlength="20"
+                onkeypress="if(event.key === 'Enter') leaderboard?.submitName()" />
+
+            <div class="prompt-buttons">
+                <button class="btn-primary" onclick="leaderboard?.submitName()">
+                    Submit Score
+                </button>
+                <button class="btn-secondary" onclick="leaderboard?.skipName()">
+                    Skip
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <!-- Game Scripts -->
+    <script src="leaderboard.js"></script>
+    <script src="game.js"></script>
+</body>
+
+</html>
