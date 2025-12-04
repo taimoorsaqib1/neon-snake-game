@@ -16,8 +16,7 @@ const CONFIG = {
         obstacleGlow: '#ff6666',
         portal: '#00ff88',
         portalGlow: '#00ffaa',
-        warning: '#ffff00',
-        shrinkWall: '#ff6600'
+        warning: '#ffff00'
     },
     twists: {
         obstacleLifetime: 5000,
@@ -30,9 +29,6 @@ const CONFIG = {
         blurAmount: 8,
         portalDuration: 8000,
         portalChance: 0.12,
-        shrinkDuration: 6000,
-        shrinkAmount: 5,
-        shrinkChance: 0.1,
         warningDuration: 1000
     }
 };
@@ -106,25 +102,6 @@ class AudioSystem {
         }
     }
 
-    playMoveSound() {
-        if (!this.enabled || !this.audioContext) return;
-
-        const now = this.audioContext.currentTime;
-        const osc = this.audioContext.createOscillator();
-        const gain = this.audioContext.createGain();
-
-        osc.connect(gain);
-        gain.connect(this.masterGain);
-
-        osc.frequency.setValueAtTime(150, now);
-        gain.gain.setValueAtTime(0.05, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
-
-        osc.type = 'sine';
-        osc.start(now);
-        osc.stop(now + 0.05);
-    }
-
     playStartSound() {
         if (!this.enabled || !this.audioContext) return;
 
@@ -170,119 +147,46 @@ class AudioSystem {
     }
 }
 
-// Game State
+// Main Game Class
 class Game {
     constructor() {
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
-        this.setupCanvas();
+        this.audio = new AudioSystem();
+
+        this.canvas.width = CONFIG.gridSize * CONFIG.tileSize;
+        this.canvas.height = CONFIG.gridSize * CONFIG.tileSize;
 
         this.snake = [];
         this.direction = { x: 1, y: 0 };
         this.nextDirection = { x: 1, y: 0 };
         this.food = { x: 0, y: 0 };
         this.score = 0;
-        this.highScore = this.loadHighScore();
-        this.gameLoop = null;
         this.speed = CONFIG.initialSpeed;
-        this.isPaused = false;
-        this.particles = [];
+        this.gameLoop = null;
         this.lastMoveTime = 0;
-        this.lastFrameTime = 0;
+        this.particles = [];
+        this.controlsSetup = false;
+        this.isGameOver = false;  // NEW: Flag to prevent multiple game over calls
+        this.isPaused = false;  // NEW: Pause flag
 
-        // Twist mechanics
+        // Game twists
         this.obstacles = [];
+        this.portals = [];
         this.speedBoostActive = false;
         this.speedBoostEndTime = 0;
         this.blurActive = false;
         this.blurEndTime = 0;
-        this.portals = [];
-        this.portalEndTime = 0;
-        this.shrinkActive = false;
-        this.shrinkEndTime = 0;
-        this.shrinkBounds = { minX: 0, minY: 0, maxX: CONFIG.gridSize, maxY: CONFIG.gridSize };
 
-        this.audio = new AudioSystem();
-
+        // High score
+        this.highScore = this.loadHighScore();
         this.updateHighScoreDisplay();
-        this.setupEventListeners();
+
+        this.init();
+        this.setupControls();
     }
 
-    setupCanvas() {
-        const size = CONFIG.gridSize * CONFIG.tileSize;
-        this.canvas.width = size;
-        this.canvas.height = size;
-    }
-
-    setupEventListeners() {
-        document.getElementById('startBtn').addEventListener('click', () => this.start());
-        document.getElementById('restartBtn').addEventListener('click', () => this.restart());
-
-        document.addEventListener('keydown', (e) => this.handleKeyPress(e));
-    }
-
-    handleKeyPress(e) {
-        if (e.code === 'Space') {
-            e.preventDefault();
-            this.togglePause();
-            return;
-        }
-
-        if (this.isPaused) return;
-
-        const key = e.key.toLowerCase();
-        const prevDirection = { ...this.nextDirection };
-        const newDirection = { ...this.nextDirection };
-
-        if ((key === 'arrowup' || key === 'w') && this.direction.y === 0) {
-            e.preventDefault(); // Prevent page scroll
-            newDirection.x = 0;
-            newDirection.y = -1;
-        } else if ((key === 'arrowdown' || key === 's') && this.direction.y === 0) {
-            e.preventDefault(); // Prevent page scroll
-            newDirection.x = 0;
-            newDirection.y = 1;
-        } else if ((key === 'arrowleft' || key === 'a') && this.direction.x === 0) {
-            e.preventDefault(); // Prevent page scroll
-            newDirection.x = -1;
-            newDirection.y = 0;
-        } else if ((key === 'arrowright' || key === 'd') && this.direction.x === 0) {
-            e.preventDefault(); // Prevent page scroll
-            newDirection.x = 1;
-            newDirection.y = 0;
-        }
-
-        if (newDirection.x !== prevDirection.x || newDirection.y !== prevDirection.y) {
-            this.audio.playMoveSound();
-        }
-
-        this.nextDirection = newDirection;
-    }
-
-    togglePause() {
-        if (!this.gameLoop) return;
-
-        this.isPaused = !this.isPaused;
-        if (!this.isPaused) {
-            this.update();
-        }
-    }
-
-    start() {
-        document.getElementById('gameOverlay').classList.add('hidden');
-        this.audio.playStartSound();
-        this.initGame();
-        this.update();
-    }
-
-    restart() {
-        document.getElementById('gameOverOverlay').classList.add('hidden');
-        this.audio.playStartSound();
-        this.initGame();
-        this.update();
-    }
-
-    initGame() {
+    init() {
         const center = Math.floor(CONFIG.gridSize / 2);
         this.snake = [
             { x: center, y: center },
@@ -294,301 +198,161 @@ class Game {
         this.nextDirection = { x: 1, y: 0 };
         this.score = 0;
         this.speed = CONFIG.initialSpeed;
-        this.isPaused = false;
         this.particles = [];
-        this.lastMoveTime = 0;
-        this.lastFrameTime = 0;
-
-        // Reset twists
         this.obstacles = [];
+        this.portals = [];
         this.speedBoostActive = false;
-        this.speedBoostEndTime = 0;
         this.blurActive = false;
-        this.blurEndTime = 0;
-        this.portals = [];
-        this.portalEndTime = 0;
-        this.shrinkActive = false;
-        this.shrinkEndTime = 0;
-        this.shrinkBounds = { minX: 0, minY: 0, maxX: CONFIG.gridSize, maxY: CONFIG.gridSize };
+        this.isGameOver = false;  // Reset game over flag
+        this.isPaused = false;  // Reset pause flag
 
-        this.updateScore();
         this.spawnFood();
+        this.updateScore();
     }
 
-    spawnFood() {
-        let newFood;
-        let attempts = 0;
-        const maxAttempts = 100;
+    setupControls() {
+        // Only set up controls once
+        if (this.controlsSetup) return;
+        this.controlsSetup = true;
 
-        do {
-            newFood = {
-                x: Math.floor(Math.random() * CONFIG.gridSize),
-                y: Math.floor(Math.random() * CONFIG.gridSize)
-            };
-            attempts++;
-        } while ((this.isSnakePosition(newFood.x, newFood.y) ||
-            this.isObstaclePosition(newFood.x, newFood.y) ||
-            this.isPortalPosition(newFood.x, newFood.y)) &&
-            attempts < maxAttempts);
+        document.addEventListener('keydown', (e) => {
+            // Don't intercept keys if user is typing in an input field
+            const activeElement = document.activeElement;
+            if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+                return;
+            }
 
-        this.food = newFood;
-    }
+            // Handle pause with space bar
+            if (e.key === ' ' || e.key === 'Spacebar') {
+                if (this.gameLoop && !this.isGameOver) {
+                    this.togglePause();
+                    e.preventDefault();
+                }
+                return;
+            }
 
-    spawnObstacle() {
-        let newObstacle;
-        let attempts = 0;
-        const maxAttempts = 100;
+            // Don't allow other controls when paused or game not running
+            if (!this.gameLoop || this.isPaused) return;
 
-        do {
-            newObstacle = {
-                x: Math.floor(Math.random() * CONFIG.gridSize),
-                y: Math.floor(Math.random() * CONFIG.gridSize),
-                spawnTime: Date.now()
-            };
-            attempts++;
-        } while ((this.isSnakePosition(newObstacle.x, newObstacle.y) ||
-            this.isObstaclePosition(newObstacle.x, newObstacle.y) ||
-            this.isPortalPosition(newObstacle.x, newObstacle.y) ||
-            (newObstacle.x === this.food.x && newObstacle.y === this.food.y)) &&
-            attempts < maxAttempts);
-
-        this.obstacles.push(newObstacle);
-    }
-
-    spawnPortals() {
-        this.portals = [];
-        let attempts = 0;
-        const maxAttempts = 100;
-
-        // Spawn first portal
-        let portal1;
-        do {
-            portal1 = {
-                x: Math.floor(Math.random() * CONFIG.gridSize),
-                y: Math.floor(Math.random() * CONFIG.gridSize)
-            };
-            attempts++;
-        } while ((this.isSnakePosition(portal1.x, portal1.y) ||
-            this.isObstaclePosition(portal1.x, portal1.y) ||
-            (portal1.x === this.food.x && portal1.y === this.food.y)) &&
-            attempts < maxAttempts);
-
-        // Spawn second portal (far from first)
-        let portal2;
-        attempts = 0;
-        do {
-            portal2 = {
-                x: Math.floor(Math.random() * CONFIG.gridSize),
-                y: Math.floor(Math.random() * CONFIG.gridSize)
-            };
-            const distance = Math.abs(portal2.x - portal1.x) + Math.abs(portal2.y - portal1.y);
-            attempts++;
-        } while ((this.isSnakePosition(portal2.x, portal2.y) ||
-            this.isObstaclePosition(portal2.x, portal2.y) ||
-            (portal2.x === this.food.x && portal2.y === this.food.y) ||
-            (portal2.x === portal1.x && portal2.y === portal1.y) ||
-            Math.abs(portal2.x - portal1.x) + Math.abs(portal2.y - portal1.y) < 10) &&
-            attempts < maxAttempts);
-
-        this.portals = [portal1, portal2];
-        this.portalEndTime = Date.now() + CONFIG.twists.portalDuration;
-    }
-
-    activateShrink() {
-        const shrink = CONFIG.twists.shrinkAmount;
-        this.shrinkBounds = {
-            minX: shrink,
-            minY: shrink,
-            maxX: CONFIG.gridSize - shrink,
-            maxY: CONFIG.gridSize - shrink
-        };
-        this.shrinkActive = true;
-        this.shrinkEndTime = Date.now() + CONFIG.twists.shrinkDuration;
-    }
-
-    isSnakePosition(x, y) {
-        return this.snake.some(segment => segment.x === x && segment.y === y);
-    }
-
-    isObstaclePosition(x, y) {
-        return this.obstacles.some(obstacle => obstacle.x === x && obstacle.y === y);
-    }
-
-    isPortalPosition(x, y) {
-        return this.portals.some(portal => portal.x === x && portal.y === y);
-    }
-
-    showWarning(message) {
-        const warningEl = document.getElementById('twistWarning');
-        const textEl = document.getElementById('warningText');
-
-        textEl.textContent = message;
-        warningEl.classList.remove('hidden');
-
-        setTimeout(() => {
-            warningEl.classList.add('hidden');
-        }, CONFIG.twists.warningDuration);
-    }
-
-    activateTwists() {
-        const twistsToActivate = [];
-
-        // Determine which twists will activate
-        if (Math.random() < CONFIG.twists.obstacleSpawnChance) {
-            twistsToActivate.push({ type: 'obstacle', message: '⚠️ OBSTACLE INCOMING!' });
-        }
-
-        if (Math.random() < CONFIG.twists.speedBoostChance) {
-            twistsToActivate.push({ type: 'speed', message: '⚡ SPEED BOOST!' });
-        }
-
-        if (Math.random() < CONFIG.twists.blurChance) {
-            twistsToActivate.push({ type: 'blur', message: '👁️ VISION BLUR!' });
-        }
-
-        if (Math.random() < CONFIG.twists.portalChance && this.portals.length === 0) {
-            twistsToActivate.push({ type: 'portal', message: '🌀 PORTALS OPENING!' });
-        }
-
-        if (Math.random() < CONFIG.twists.shrinkChance && !this.shrinkActive) {
-            twistsToActivate.push({ type: 'shrink', message: '📦 ARENA SHRINKING!' });
-        }
-
-        // Activate twists with warnings
-        twistsToActivate.forEach((twist, index) => {
-            setTimeout(() => {
-                this.showWarning(twist.message);
-
-                setTimeout(() => {
-                    switch (twist.type) {
-                        case 'obstacle':
-                            this.spawnObstacle();
-                            break;
-                        case 'speed':
-                            this.speedBoostActive = true;
-                            this.speedBoostEndTime = Date.now() + CONFIG.twists.speedBoostDuration;
-                            break;
-                        case 'blur':
-                            this.blurActive = true;
-                            this.blurEndTime = Date.now() + CONFIG.twists.blurDuration;
-                            break;
-                        case 'portal':
-                            this.spawnPortals();
-                            break;
-                        case 'shrink':
-                            this.activateShrink();
-                            break;
+            switch (e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    if (this.direction.y === 0) {
+                        this.nextDirection = { x: 0, y: -1 };
                     }
-                    this.audio.playPowerUpSound();
-                }, CONFIG.twists.warningDuration);
-            }, index * 200); // Stagger warnings if multiple twists
+                    e.preventDefault();
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    if (this.direction.y === 0) {
+                        this.nextDirection = { x: 0, y: 1 };
+                    }
+                    e.preventDefault();
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    if (this.direction.x === 0) {
+                        this.nextDirection = { x: -1, y: 0 };
+                    }
+                    e.preventDefault();
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    if (this.direction.x === 0) {
+                        this.nextDirection = { x: 1, y: 0 };
+                    }
+                    e.preventDefault();
+                    break;
+            }
         });
     }
 
-    updateTwists(currentTime) {
-        const now = Date.now();
-
-        // Remove expired obstacles
-        this.obstacles = this.obstacles.filter(obstacle =>
-            now - obstacle.spawnTime < CONFIG.twists.obstacleLifetime
-        );
-
-        // Check speed boost expiration
-        if (this.speedBoostActive && now >= this.speedBoostEndTime) {
-            this.speedBoostActive = false;
-        }
-
-        // Check blur expiration
-        if (this.blurActive && now >= this.blurEndTime) {
-            this.blurActive = false;
-        }
-
-        // Check portal expiration
-        if (this.portals.length > 0 && now >= this.portalEndTime) {
-            this.portals = [];
-        }
-
-        // Check shrink expiration
-        if (this.shrinkActive && now >= this.shrinkEndTime) {
-            this.shrinkActive = false;
-            this.shrinkBounds = { minX: 0, minY: 0, maxX: CONFIG.gridSize, maxY: CONFIG.gridSize };
-        }
-    }
-
-    getCurrentSpeed() {
-        if (this.speedBoostActive) {
-            return this.speed / CONFIG.twists.speedBoostMultiplier;
-        }
-        return this.speed;
-    }
-
-    checkPortalCollision(x, y) {
-        if (this.portals.length !== 2) return { x, y };
-
-        if (x === this.portals[0].x && y === this.portals[0].y) {
-            return { x: this.portals[1].x, y: this.portals[1].y };
-        } else if (x === this.portals[1].x && y === this.portals[1].y) {
-            return { x: this.portals[0].x, y: this.portals[0].y };
-        }
-
-        return { x, y };
-    }
-
-    update(currentTime = 0) {
-        if (!this.lastFrameTime) {
-            this.lastFrameTime = currentTime;
-            this.lastMoveTime = currentTime;
-        }
-
-        this.gameLoop = requestAnimationFrame((time) => this.update(time));
+    togglePause() {
+        this.isPaused = !this.isPaused;
 
         if (this.isPaused) {
-            this.lastFrameTime = currentTime;
-            this.lastMoveTime = currentTime;
+            console.log('Game Paused');
+        } else {
+            console.log('Game Resumed');
+            // Reset lastMoveTime to prevent sudden jump
+            this.lastMoveTime = performance.now();
+        }
+    }
+
+    start() {
+        this.init();
+        document.getElementById('gameOverOverlay').classList.add('hidden');
+        this.audio.playStartSound();
+        this.lastMoveTime = performance.now();
+        this.loop();
+    }
+
+    loop() {
+        // CRITICAL: Stop loop if game is over or paused
+        if (this.isGameOver) return;
+        if (this.isPaused) {
+            this.gameLoop = requestAnimationFrame(() => this.loop());
             return;
         }
 
-        const deltaTime = currentTime - this.lastFrameTime;
-        this.lastFrameTime = currentTime;
+        const currentTime = performance.now();
+        const deltaTime = currentTime - this.lastMoveTime;
 
-        this.updateTwists(currentTime);
+        const currentSpeed = this.speedBoostActive ?
+            this.speed / CONFIG.twists.speedBoostMultiplier :
+            this.speed;
+
+        if (deltaTime >= currentSpeed) {
+            this.update();
+            this.lastMoveTime = currentTime;
+        }
+
         this.updateParticles();
         this.draw();
 
-        const currentSpeed = this.getCurrentSpeed();
-        if (currentTime - this.lastMoveTime < currentSpeed) {
-            return;
-        }
+        this.gameLoop = requestAnimationFrame(() => this.loop());
+    }
 
-        this.lastMoveTime = currentTime;
+    update() {
         this.direction = { ...this.nextDirection };
 
-        let head = { ...this.snake[0] };
-        head.x += this.direction.x;
-        head.y += this.direction.y;
+        const head = {
+            x: this.snake[0].x + this.direction.x,
+            y: this.snake[0].y + this.direction.y
+        };
 
-        // Check portal teleportation
-        const teleported = this.checkPortalCollision(head.x, head.y);
-        head.x = teleported.x;
-        head.y = teleported.y;
-
-        // Check wall collision (considering shrink)
-        const bounds = this.shrinkActive ? this.shrinkBounds : { minX: 0, minY: 0, maxX: CONFIG.gridSize, maxY: CONFIG.gridSize };
-        if (head.x < bounds.minX || head.x >= bounds.maxX || head.y < bounds.minY || head.y >= bounds.maxY) {
+        // Check wall collision
+        if (head.x < 0 || head.x >= CONFIG.gridSize ||
+            head.y < 0 || head.y >= CONFIG.gridSize) {
             this.gameOver();
             return;
         }
 
         // Check self collision
-        if (this.isSnakePosition(head.x, head.y)) {
+        if (this.snake.some(segment => segment.x === head.x && segment.y === head.y)) {
             this.gameOver();
             return;
         }
 
         // Check obstacle collision
-        if (this.isObstaclePosition(head.x, head.y)) {
+        if (this.obstacles.some(obs => obs.x === head.x && obs.y === head.y)) {
             this.gameOver();
             return;
+        }
+
+        // Check portal collision
+        const portalIndex = this.portals.findIndex(p => p.x === head.x && p.y === head.y);
+        if (portalIndex !== -1) {
+            const otherPortalIndex = portalIndex === 0 ? 1 : 0;
+            if (this.portals[otherPortalIndex]) {
+                head.x = this.portals[otherPortalIndex].x;
+                head.y = this.portals[otherPortalIndex].y;
+                this.audio.playPowerUpSound();
+            }
         }
 
         this.snake.unshift(head);
@@ -608,6 +372,160 @@ class Game {
             }
         } else {
             this.snake.pop();
+        }
+
+        this.updateTwists();
+    }
+
+    spawnFood() {
+        let newFood;
+        let attempts = 0;
+        const maxAttempts = 100;
+
+        do {
+            newFood = {
+                x: Math.floor(Math.random() * CONFIG.gridSize),
+                y: Math.floor(Math.random() * CONFIG.gridSize)
+            };
+            attempts++;
+        } while (
+            attempts < maxAttempts && (
+                this.snake.some(segment => segment.x === newFood.x && segment.y === newFood.y) ||
+                this.obstacles.some(obs => obs.x === newFood.x && obs.y === newFood.y) ||
+                this.portals.some(portal => portal.x === newFood.x && portal.y === newFood.y)
+            )
+        );
+
+        this.food = newFood;
+    }
+
+    activateTwists() {
+        // Spawn obstacles - now spawns 5 at once with warning
+        if (Math.random() < CONFIG.twists.obstacleSpawnChance && this.obstacles.length === 0) {
+            // Show warning first
+            this.showWarning('OBSTACLES INCOMING!');
+
+            // Spawn 5 obstacles after warning
+            setTimeout(() => {
+                // Don't spawn if game is over
+                if (this.isGameOver) return;
+
+                const obstaclesToSpawn = 5;
+                for (let i = 0; i < obstaclesToSpawn; i++) {
+                    let newObstacle;
+                    let attempts = 0;
+
+                    do {
+                        newObstacle = {
+                            x: Math.floor(Math.random() * CONFIG.gridSize),
+                            y: Math.floor(Math.random() * CONFIG.gridSize),
+                            spawnTime: Date.now()
+                        };
+                        attempts++;
+                    } while (
+                        attempts < 50 && (
+                            this.snake.some(s => s.x === newObstacle.x && s.y === newObstacle.y) ||
+                            (this.food.x === newObstacle.x && this.food.y === newObstacle.y) ||
+                            this.obstacles.some(o => o.x === newObstacle.x && o.y === newObstacle.y)
+                        )
+                    );
+
+                    if (attempts < 50) {
+                        this.obstacles.push(newObstacle);
+                    }
+                }
+            }, CONFIG.twists.warningDuration);
+        }
+
+        // Speed boost
+        if (Math.random() < CONFIG.twists.speedBoostChance) {
+            this.showWarning('SPEED BOOST!');
+            this.speedBoostActive = true;
+            this.speedBoostEndTime = Date.now() + CONFIG.twists.speedBoostDuration;
+        }
+
+        // Blur effect
+        if (Math.random() < CONFIG.twists.blurChance) {
+            this.showWarning('BLUR INCOMING!');
+            setTimeout(() => {
+                if (this.isGameOver) return;
+                this.blurActive = true;
+                this.blurEndTime = Date.now() + CONFIG.twists.blurDuration;
+            }, CONFIG.twists.warningDuration);
+        }
+
+        // Spawn portals
+        if (Math.random() < CONFIG.twists.portalChance && this.portals.length === 0) {
+            this.showWarning('PORTALS ACTIVATED!');
+            const portal1 = this.getRandomEmptyPosition();
+            const portal2 = this.getRandomEmptyPosition();
+
+            if (portal1 && portal2) {
+                this.portals = [
+                    { ...portal1, spawnTime: Date.now() },
+                    { ...portal2, spawnTime: Date.now() }
+                ];
+            }
+        }
+    }
+
+    showWarning(text) {
+        const warningElement = document.getElementById('twistWarning');
+        const warningText = document.getElementById('warningText');
+
+        if (warningElement && warningText) {
+            warningText.textContent = text;
+            warningElement.classList.remove('hidden');
+
+            setTimeout(() => {
+                warningElement.classList.add('hidden');
+            }, CONFIG.twists.warningDuration);
+        }
+    }
+
+    getRandomEmptyPosition() {
+        let position;
+        let attempts = 0;
+
+        do {
+            position = {
+                x: Math.floor(Math.random() * CONFIG.gridSize),
+                y: Math.floor(Math.random() * CONFIG.gridSize)
+            };
+            attempts++;
+        } while (
+            attempts < 50 && (
+                this.snake.some(s => s.x === position.x && s.y === position.y) ||
+                (this.food.x === position.x && this.food.y === position.y) ||
+                this.obstacles.some(o => o.x === position.x && o.y === position.y) ||
+                this.portals.some(p => p.x === position.x && p.y === position.y)
+            )
+        );
+
+        return attempts < 50 ? position : null;
+    }
+
+    updateTwists() {
+        const now = Date.now();
+
+        // Remove expired obstacles
+        this.obstacles = this.obstacles.filter(obs =>
+            now - obs.spawnTime < CONFIG.twists.obstacleLifetime
+        );
+
+        // Remove expired portals
+        this.portals = this.portals.filter(portal =>
+            now - portal.spawnTime < CONFIG.twists.portalDuration
+        );
+
+        // Deactivate speed boost
+        if (this.speedBoostActive && now > this.speedBoostEndTime) {
+            this.speedBoostActive = false;
+        }
+
+        // Deactivate blur
+        if (this.blurActive && now > this.blurEndTime) {
+            this.blurActive = false;
         }
     }
 
@@ -641,24 +559,33 @@ class Game {
     }
 
     draw() {
-        if (this.blurActive) {
-            this.ctx.filter = `blur(${CONFIG.twists.blurAmount}px)`;
-        } else {
+        try {
+            // Safety check
+            if (!this.ctx || !this.canvas) {
+                console.error('Canvas context lost!');
+                return;
+            }
+
+            if (this.blurActive) {
+                this.ctx.filter = `blur(${CONFIG.twists.blurAmount}px)`;
+            } else {
+                this.ctx.filter = 'none';
+            }
+
+            this.ctx.fillStyle = '#0a0a0f';
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+            this.drawGrid();
+            this.drawObstacles();
+            this.drawPortals();
+            this.drawFood();
+            this.drawParticles();
+            this.drawSnake();
+
             this.ctx.filter = 'none';
+        } catch (error) {
+            console.error('Draw error:', error);
         }
-
-        this.ctx.fillStyle = '#0a0a0f';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-        this.drawGrid();
-        this.drawShrinkWalls();
-        this.drawObstacles();
-        this.drawPortals();
-        this.drawFood();
-        this.drawParticles();
-        this.drawSnake();
-
-        this.ctx.filter = 'none';
     }
 
     drawGrid() {
@@ -676,33 +603,6 @@ class Game {
             this.ctx.lineTo(this.canvas.width, i * CONFIG.tileSize);
             this.ctx.stroke();
         }
-    }
-
-    drawShrinkWalls() {
-        if (!this.shrinkActive) return;
-
-        const shrink = CONFIG.twists.shrinkAmount;
-        this.ctx.fillStyle = CONFIG.colors.shrinkWall + '40';
-        this.ctx.strokeStyle = CONFIG.colors.shrinkWall;
-        this.ctx.lineWidth = 3;
-
-        // Draw danger zones
-        // Top
-        this.ctx.fillRect(0, 0, this.canvas.width, shrink * CONFIG.tileSize);
-        // Bottom
-        this.ctx.fillRect(0, (CONFIG.gridSize - shrink) * CONFIG.tileSize, this.canvas.width, shrink * CONFIG.tileSize);
-        // Left
-        this.ctx.fillRect(0, 0, shrink * CONFIG.tileSize, this.canvas.height);
-        // Right
-        this.ctx.fillRect((CONFIG.gridSize - shrink) * CONFIG.tileSize, 0, shrink * CONFIG.tileSize, this.canvas.height);
-
-        // Draw border
-        this.ctx.strokeRect(
-            shrink * CONFIG.tileSize,
-            shrink * CONFIG.tileSize,
-            (CONFIG.gridSize - shrink * 2) * CONFIG.tileSize,
-            (CONFIG.gridSize - shrink * 2) * CONFIG.tileSize
-        );
     }
 
     drawObstacles() {
@@ -878,6 +778,11 @@ class Game {
     }
 
     gameOver() {
+        // Prevent multiple game over calls
+        if (this.isGameOver) return;
+        this.isGameOver = true;
+
+        // Stop the game loop immediately
         if (this.gameLoop) {
             cancelAnimationFrame(this.gameLoop);
             this.gameLoop = null;
@@ -912,4 +817,28 @@ class Game {
 let game;
 window.addEventListener('DOMContentLoaded', () => {
     game = new Game();
+
+    // Connect start button
+    const startBtn = document.getElementById('startBtn');
+    if (startBtn) {
+        startBtn.addEventListener('click', () => {
+            document.getElementById('gameOverlay').classList.add('hidden');
+            game.start();
+        });
+    }
+
+    // Connect restart button - returns to main menu
+    const restartBtn = document.getElementById('restartBtn');
+    if (restartBtn) {
+        restartBtn.addEventListener('click', () => {
+            // Return to main menu instead of restarting immediately
+            if (typeof menuSystem !== 'undefined') {
+                document.getElementById('gameOverOverlay').classList.add('hidden');
+                menuSystem.returnToMainMenu();
+            } else {
+                // Fallback: restart the game if menu system not available
+                game.start();
+            }
+        });
+    }
 });
